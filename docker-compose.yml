@@ -1,0 +1,19 @@
+services:
+
+  cdl-docker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CYBERDROP_DL_VERSION: "10.0.0"
+    container_name: cdl-docker
+    image: apxangels/cdl-docker:10.0
+    network_mode: host
+    volumes:
+      - ./AppData:/cyberdrop-dl/AppData
+      - ./downloads:/cyberdrop-dl/downloads
+      - ./URLs.txt:/cyberdrop-dl/URLs.txt:ro
+    restart: "no"
+    stdin_open: true
+    tty: true
+    command: ["cyberdrop-dl"]

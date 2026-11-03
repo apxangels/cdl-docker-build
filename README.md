@@ -1,84 +1,102 @@
+# Unofficial CyberDropDownloader Docker Image (v10)
 
-# Unofficial CyberDropDownloader Docker Image
+> **Disclaimer:** This is ENTIRELY unofficial. Do NOT ask for support from the dev(s) of `cyberdrop-dl-patched`.
 
-## Before proceeding
-This is ENTIRELY unofficial. Do NOT ask for support from the dev(s) of cyberdrop-dl-patched.
+Multi-platform Docker image for [cyberdrop-dl-patched](https://github.com/Cyberdrop-DL/cyberdrop-dl) **v10.x**.
 
+## What's inside
 
-### GHCR / Dockerhub Repos (amd64/arm64)
+- Python 3.13 slim base
+- `cyberdrop-dl-patched` (version pinned at build time)
+- `ffmpeg` / `ffprobe`
+- `gotty` for optional Web TTY
+- Runtime user `abc` with proper XDG paths redirected to `/cyberdrop-dl/AppData`
+
+## Build
+
+```bash
+docker build \
+  --build-arg CYBERDROP_DL_VERSION=10.0.0 \
+  -t apxangels/cdl-docker:10.0 .
 ```
-docker pull ghcr.io/ne0lith/cdl-docker:latest
+
+## Docker Compose
+
+```yaml
+services:
+  cdl-docker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CYBERDROP_DL_VERSION: "10.0.0"
+    container_name: cdl-docker
+    image: apxangels/cdl-docker:10.0
+    network_mode: host
+    volumes:
+      - ./AppData:/cyberdrop-dl/AppData   # config, DB, cache, logs
+      - ./downloads:/cyberdrop-dl/downloads # downloaded files
+      - ./URLs.txt:/cyberdrop-dl/URLs.txt:ro
+    restart: "no"
+    stdin_open: true
+    tty: true
+    command: ["cyberdrop-dl"]
 ```
 
-```
-docker pull ne0lith/cdl-docker:latest
-```
+## Volumes explained
 
-## Docker run command
+| Host path | Container path | Purpose |
+|-----------|----------------|---------|
+| `./AppData` | `/cyberdrop-dl/AppData` | Persistent XDG data: `config.yaml`, `cyberdrop.db`, `cache.json`, logs |
+| `./downloads` | `/cyberdrop-dl/downloads` | Download destination (can be any host folder) |
+| `./URLs.txt` | `/cyberdrop-dl/URLs.txt` | URL list (read-only mount) |
 
-```
-docker run -it \
+The entrypoint automatically:
+- Creates missing XDG subdirectories inside `AppData`
+- Generates a default `config.yaml` if none exists
+- Patches `download_folder` to `/cyberdrop-dl/downloads` so it matches the volume
+- Appends `--input-file /cyberdrop-dl/URLs.txt` when running `cyberdrop-dl download` if no other input file is provided
+
+## Docker run
+
+```bash
+docker run -it --rm \
   --name cdl-docker \
-  -v $(pwd)/AppData:/cyberdrop-dl/AppData \
-  -v $(pwd)/Downloads:/cyberdrop-dl/Downloads \
-  ne0lith/cdl-docker:latest \
+  -v "$(pwd)/AppData:/cyberdrop-dl/AppData" \
+  -v "$(pwd)/downloads:/cyberdrop-dl/downloads" \
+  -v "$(pwd)/URLs.txt:/cyberdrop-dl/URLs.txt:ro" \
+  apxangels/cdl-docker:10.0 \
   cyberdrop-dl
-```
-
-## Docker-Compose configuration
-
-```yaml
-version: '3'
-
-services:
-  cdl-docker:
-    container_name: cdl-docker
-    image: ne0lith/cdl-docker:latest
-    volumes:
-      - /path/to/AppData:/cyberdrop-dl/AppData
-      - /path/to/Downloads:/cyberdrop-dl/Downloads
-    restart: no
-    stdin_open: true
-    tty: true
-    # You can override the default command by changing the following line
-    command: ["cyberdrop-dl"]
-```
-
-## Docker-Compose configuration for NAS support
-
-```yaml
-version: '3'
-
-services:
-  cdl-docker:
-    container_name: cdl-docker
-    image: ne0lith/cdl-docker:latest
-    # this allows us to use this on a nas, even though it is unsupported
-    # downside is your cyberdrop.db file has to remain local to the container host
-    volumes:
-      - /path/to/local/AppData/Cache:/cyberdrop-dl/AppData/Cache
-      - /path/to/nas/Appdata/Configs:/cyberdrop-dl/AppData/Configs
-      - /path/to/nas/Downloads:/cyberdrop-dl/Downloads
-    restart: no
-    stdin_open: true
-    tty: true
-    # You can override the default command by changing the following line
-    command: ["cyberdrop-dl"]
 ```
 
 ## Running as a different user
 
-In situations where you need the daemon to be run as a different user, specify a user/group in your `docker run` or `docker-compose.yml` file to run as a different user. [fixuid](https://github.com/boxboat/fixuid) will handle it at runtime.
+The image uses `gosu` in the entrypoint to drop privileges. If you need a different UID/GID, set them in `docker run` or `docker-compose.yml`:
 
-- In `docker run` commands, you can specify the user like this: `--user 1000:1000`
-- In `docker-compose.yml` files, you can specify the user like this: `user: ${FIXUID:-1000}:${FIXGID:-1000}`
+```yaml
+user: "1000:1000"
+```
 
-## Web TTY
+The entrypoint will `chown` the `AppData` volume to that user before starting.
 
-Support for headless operation with UI via the web is available via [gotty](https://github.com/sorenisanerd/gotty). Configuration via env, most common options:
+## Web TTY (headless UI)
 
-- `GOTTY=true` to enable
-- `GOTTY_PORT=6969`
-- `GOTTY_CREDENTIAL=user:pass`
+Enable via environment variables:
 
-See [gotty docs](https://github.com/sorenisanerd/gotty/#options) for additional options, including tls.
+```yaml
+environment:
+  - GOTTY=true
+  - GOTTY_PORT=6969
+  - GOTTY_CREDENTIAL=user:pass
+```
+
+See [gotty docs](https://github.com/sorenisanerd/gotty/#options) for more options.
+
+## Upgrading to a newer v10 release
+
+Change the `CYBERDROP_DL_VERSION` build arg and rebuild:
+
+```bash
+docker compose build --no-cache
+docker compose run --rm cdl-docker
+```
