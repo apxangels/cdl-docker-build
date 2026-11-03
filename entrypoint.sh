@@ -18,6 +18,13 @@ mkdir -p "${XDG_STATE_HOME}/cyberdrop-dl/logs"
 # Fix ownership for volume mounts that come in as root
 chown -R abc:abc "${APP_DIR}" 2>/dev/null || true
 
+# Ensure cache.json is a valid JSON dict (empty or corrupted files crash v10)
+CACHE_FILE="${XDG_CACHE_HOME}/cyberdrop-dl/cache.json"
+if ! python3 -c "import json,sys; data=json.load(open('${CACHE_FILE}')); sys.exit(0 if type(data) is dict else 1)" 2>/dev/null; then
+    echo '{}' > "${CACHE_FILE}"
+    chown abc:abc "${CACHE_FILE}" 2>/dev/null || true
+fi
+
 CONFIG_FILE="${XDG_CONFIG_HOME}/cyberdrop-dl/config.yaml"
 
 if [ ! -f "${CONFIG_FILE}" ]; then
